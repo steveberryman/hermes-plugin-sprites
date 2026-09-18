@@ -21,10 +21,8 @@ import threading
 import uuid
 from pathlib import Path
 
-from tools.environments.base import (
-    BaseEnvironment,
-    _ThreadedProcessHandle,
-)
+from tools.environments.base import BaseEnvironment
+from tools.environments.base_output import _ThreadedProcessHandle
 from tools.environments.file_sync import (
     FileSyncManager,
     iter_sync_files,
@@ -213,16 +211,19 @@ class SpritesEnvironment(BaseEnvironment):
         requested_cwd = cwd
         super().__init__(cwd=cwd, timeout=timeout)
 
+        # sprites-py is declared in plugin.yaml (python_dependencies). Newer
+        # Hermes installs it on `hermes plugins install/enable`; older Hermes
+        # only warns. Neither installs at load time, so fail with a clear hint.
         try:
-            from tools.lazy_deps import ensure as _lazy_ensure
-            _lazy_ensure("terminal.sprites", prompt=False)
-        except ImportError:
-            pass
-        except Exception as e:
-            raise ImportError(str(e))
-
-        from sprites import SpritesClient
-        from sprites.exceptions import NotFoundError, SpriteError
+            from sprites import SpritesClient
+            from sprites.exceptions import NotFoundError, SpriteError
+        except ImportError as e:
+            raise ImportError(
+                "Sprites backend requires the sprites-py SDK in Hermes' Python "
+                "environment: pip install 'sprites-py>=0.5.0,<0.6' "
+                "(or `hermes plugins enable sprites` on Hermes that installs "
+                "plugin python_dependencies)"
+            ) from e
 
         self._NotFoundError = NotFoundError
         self._SpriteError = SpriteError

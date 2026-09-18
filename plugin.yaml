@@ -3,5 +3,9 @@ version: 1.0.0
 description: Sprites terminal backend — stateful cloud sandboxes on Fly.io with checkpoint & restore
 author: Kyle McLaren (@kylemclaren) / Nous Research
 kind: backend
+# tools/environments/base_output.py (where _ThreadedProcessHandle lives) arrived in 0.21.0
+requires_hermes: ">=0.21.0"
 requires_env:
   - SPRITES_TOKEN
+python_dependencies:
+  - sprites-py>=0.5.0,<0.6

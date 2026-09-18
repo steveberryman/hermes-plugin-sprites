@@ -94,10 +94,6 @@ def make_env(sprites_sdk, monkeypatch):
     ``client.get_sprite()`` does (e.g. raise NotFoundError to force create).
     """
     monkeypatch.setenv("SPRITES_TOKEN", "test-token")
-    # Don't try to lazy-install the SDK during tests
-    monkeypatch.setattr(
-        "tools.lazy_deps.ensure", lambda *a, **k: None, raising=False
-    )
     # Skip credential-file enumeration so init doesn't bring in real ~/.hermes state
     monkeypatch.setattr(
         "tools.credential_files.get_credential_file_mounts", lambda: []
@@ -149,9 +145,6 @@ class TestConstruction:
     def test_missing_token_raises(self, sprites_sdk, monkeypatch):
         monkeypatch.delenv("SPRITES_TOKEN", raising=False)
         monkeypatch.delenv("SPRITE_TOKEN", raising=False)
-        monkeypatch.setattr(
-            "tools.lazy_deps.ensure", lambda *a, **k: None, raising=False
-        )
         from sprites_environment import SpritesEnvironment
 
         with pytest.raises(ValueError, match="SPRITES_TOKEN"):
@@ -229,14 +222,14 @@ class TestEphemeralIsolation:
             monkeypatch.setenv("TERMINAL_ENV", "sprites")
             monkeypatch.setenv("TERMINAL_CONTAINER_PERSISTENT", "false")
             monkeypatch.setattr(tt, "_terminal_config_bridge_attempted", True)
-            assert tt._session_isolation_enabled() is True
+            assert tt._session_scope().session_isolated is True
             # Docker-only paths (workspace mounts, container teardown) stay off.
             assert tt._docker_session_isolation_enabled() is False
             # An ordinary session task id no longer collapses onto the shared key.
             assert tt._resolve_container_task_id("session-abc123") != "default"
             # Persistent mode keeps the documented shared-Sprite contract.
             monkeypatch.setenv("TERMINAL_CONTAINER_PERSISTENT", "true")
-            assert tt._session_isolation_enabled() is False
+            assert tt._session_scope().session_isolated is False
             assert tt._resolve_container_task_id("session-abc123") == "default"
         finally:
             reg._reset_for_tests()
@@ -299,9 +292,6 @@ class TestPersistentCreateRace:
     @staticmethod
     def _prep(monkeypatch):
         monkeypatch.setenv("SPRITES_TOKEN", "test-token")
-        monkeypatch.setattr(
-            "tools.lazy_deps.ensure", lambda *a, **k: None, raising=False
-        )
         monkeypatch.setattr(
             "tools.credential_files.get_credential_file_mounts", lambda: []
         )
@@ -577,6 +567,7 @@ class TestDispatchWiring:
         sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
         import __init__ as plugin_pkg
         import tools.terminal_tool as tt
+        import tools.terminal_tool_backends as backends
         from agent import terminal_env_registry as reg
 
         reg._reset_for_tests()
@@ -626,7 +617,9 @@ class TestDispatchWiring:
         monkeypatch.setattr(tt, "_get_env_config", lambda: config)
         monkeypatch.setattr(tt, "_start_cleanup_thread", lambda: None)
         monkeypatch.setattr(tt, "_check_all_guards", lambda *a, **k: {"approved": True})
-        monkeypatch.setattr(tt, "_create_environment", fake_create_environment)
+        # terminal_tool_lifecycle imports _create_environment from
+        # terminal_tool_backends at call time, so patch it there.
+        monkeypatch.setattr(backends, "_create_environment", fake_create_environment)
         monkeypatch.setattr(tt, "_active_environments", {})
         monkeypatch.setattr(tt, "_last_activity", {})
 
@@ -643,7 +636,7 @@ class TestDispatchWiring:
 
     def test_create_environment_passes_persistence_and_task_id(self, monkeypatch):
         """Registry dispatch: _create_environment falls through to the provider."""
-        import tools.terminal_tool as tt
+        import tools.terminal_tool_backends as tt
         import sprites_environment as sprites_mod
         from agent import terminal_env_registry as reg
 

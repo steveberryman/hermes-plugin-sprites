@@ -10,8 +10,13 @@ Built on the pluggable terminal-backend extension point (hermes-agent PR #94400)
 # 1. Copy/clone this repo into the Hermes plugins dir
 git clone git@github.com:NousResearch/hermes-plugin-sprites.git ~/.hermes/plugins/sprites
 
-# 2. Install the SDK
+# 2. Install the SDK into Hermes' Python environment. It is declared in
+#    plugin.yaml (python_dependencies); Hermes versions that install plugin
+#    dependencies do this on `hermes plugins enable`, older ones only warn.
 pip install 'sprites-py>=0.5.0,<0.6'
+
+# Optional: check the plugin against your installed Hermes (no token needed)
+cd /path/to/hermes-agent && python ~/.hermes/plugins/sprites/scripts/check_hermes_compat.py ~/.hermes/plugins/sprites
 
 # 3. Enable + select
 hermes plugins enable sprites
