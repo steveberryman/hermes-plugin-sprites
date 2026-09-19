@@ -775,6 +775,18 @@ class TestRunBashExitCodes:
         handle.wait()
         assert handle.returncode == 124
 
+    def test_builtin_timeout_surfaces_124(self, make_env):
+        """sprites-py's run_sync() deadline raises the builtin TimeoutError."""
+        env = make_env(task_id="rbto2")
+        cmd = MagicMock()
+        cmd.combined_output.side_effect = TimeoutError()
+        env._mock_sprite.command = MagicMock(return_value=cmd)
+
+        handle = env._run_bash("sleep 999", timeout=1)
+        handle.wait()
+        assert handle.returncode == 124
+        assert "timed out" in handle.stdout.read()
+
 
 # ---------------------------------------------------------------------------
 # File-sync push (upload_fn behavior)
@@ -792,10 +804,12 @@ class TestFileSyncPush:
         env._fs.__truediv__.return_value = remote_path_obj
 
         env._sprite_upload(str(host_file), "/home/sprite/.hermes/foo")
-        remote_path_obj.parent.mkdir.assert_called_once_with(
-            parents=True, exist_ok=True
+        # Parents are created server-side; SpritePath.mkdir(exist_ok=True) is
+        # broken for non-empty directories in sprites-py, so never call it.
+        remote_path_obj.parent.mkdir.assert_not_called()
+        remote_path_obj.write_bytes.assert_called_once_with(
+            b"hello", mkdir_parents=True
         )
-        remote_path_obj.write_bytes.assert_called_once_with(b"hello")
 
     def test_delete_invokes_unlink_per_path(self, make_env):
         env = make_env(task_id="fsdel")

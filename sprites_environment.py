@@ -323,11 +323,17 @@ class SpritesEnvironment(BaseEnvironment):
     # ------------------------------------------------------------------
 
     def _sprite_upload(self, host_path: str, remote_path: str) -> None:
-        """Upload a single file via the SpriteFilesystem API."""
+        """Upload a single file via the SpriteFilesystem API.
+
+        Parent directories are created server-side by ``write_bytes``
+        (``mkdir_parents=True``). Don't call ``SpritePath.mkdir(exist_ok=True)``
+        first: in sprites-py (<=0.7.1) ``stat()`` on a non-empty directory
+        returns its first child's entry, so that raises "exists but is not a
+        directory" as soon as the directory holds a file.
+        """
         data = Path(host_path).read_bytes()
         remote = self._fs / remote_path
-        remote.parent.mkdir(parents=True, exist_ok=True)
-        remote.write_bytes(data)
+        remote.write_bytes(data, mkdir_parents=True)
 
     def _sprite_delete(self, remote_paths: list[str]) -> None:
         """Delete remote files.
@@ -380,7 +386,10 @@ class SpritesEnvironment(BaseEnvironment):
                 buf = (e.stdout or b"") + (e.stderr or b"")
                 return (buf.decode("utf-8", errors="replace"),
                         e.exit_code() if callable(getattr(e, "exit_code", None)) else 1)
-            except SpritesTimeout:
+            except (SpritesTimeout, TimeoutError):
+                # The SDK raises its own TimeoutError from the exec, but its
+                # outer run_sync() wait uses the same deadline and usually
+                # fires first with the builtin TimeoutError. Catch both.
                 return (f"command timed out after {cmd_timeout}s\n", 124)
 
         # No external cancel: the SDK does not expose a kill hook on a
